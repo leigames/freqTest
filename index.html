@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>白点比例估计测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            margin-top: 30px;
+        }
+        #canvas {
+            border: 1px solid #000;
+            margin: 20px auto;
+            display: block;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .progress {
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .result {
+            margin-top: 30px;
+            text-align: left;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+        .result-item {
+            margin: 10px 0;
+        }
+        .input-container {
+            margin: 20px 0;
+        }
+        input {
+            padding: 8px;
+            width: 80px;
+            font-size: 16px;
+        }
+        label {
+            font-size: 16px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>白点比例估计测试</h1>
+    <p>请估计每张图中白点所占的比例（0-100%）</p>
+    
+    <div id="start-screen">
+        <button id="start-btn">开始测试</button>
+    </div>
+    
+    <div id="test-screen" style="display: none;">
+        <div class="progress">测试进度: <span id="progress">1</span>/10</div>
+        <canvas id="canvas" width="640" height="360"></canvas>
+        <div class="input-container">
+            <label for="estimate">你的估计 (%):</label>
+            <input type="number" id="estimate" min="0" max="100" step="1">
+        </div>
+        <button id="next-btn">下一张</button>
+    </div>
+    
+    <div id="result-screen" style="display: none;">
+        <h2>测试结果</h2>
+        <div id="results" class="result"></div>
+        <button id="restart-btn">重新测试</button>
+    </div>
+
+    <script>
+        // 全局变量
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('start-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const estimateInput = document.getElementById('estimate');
+        const progressDisplay = document.getElementById('progress');
+        const startScreen = document.getElementById('start-screen');
+        const testScreen = document.getElementById('test-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const resultsContainer = document.getElementById('results');
+        
+        let currentTest = 0;
+        const totalTests = 10;
+        const testData = [];
+        const width = 160;
+        const height = 90;
+        const scale = 4; // 放大倍数，使点更清晰
+        
+        // 开始测试
+        startBtn.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            testScreen.style.display = 'block';
+            generateDotImage();
+        });
+        
+        // 下一张图片
+        nextBtn.addEventListener('click', () => {
+            const estimate = parseInt(estimateInput.value);
+            
+            if (isNaN(estimate) || estimate < 0 || estimate > 100) {
+                alert('请输入0-100之间的有效数字');
+                return;
+            }
+            
+            // 保存当前测试结果
+            testData.push({
+                actual: Math.round((whitePixels / (width * height)) * 100),
+                estimate: estimate
+            });
+            
+            // 清空输入
+            estimateInput.value = '';
+            
+            // 更新进度
+            currentTest++;
+            progressDisplay.textContent = currentTest + 1;
+            
+            if (currentTest < totalTests) {
+                generateDotImage();
+            } else {
+                // 测试结束，显示结果
+                showResults();
+            }
+        });
+        
+        // 重新测试
+        restartBtn.addEventListener('click', () => {
+            currentTest = 0;
+            testData.length = 0;
+            progressDisplay.textContent = '1';
+            resultScreen.style.display = 'none';
+            testScreen.style.display = 'block';
+            generateDotImage();
+        });
+        
+        let whitePixels = 0;
+        
+        // 生成点阵图
+        function generateDotImage() {
+            // 清空画布
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 随机决定白点比例 (10%-90%)
+            const whiteRatio = 0.1 + Math.random() * 0.8;
+            whitePixels = 0;
+            
+            // 绘制点阵
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    if (Math.random() < whiteRatio) {
+                        ctx.fillStyle = 'white';
+                        whitePixels++;
+                    } else {
+                        ctx.fillStyle = 'black';
+                    }
+                    ctx.fillRect(x * scale, y * scale, scale, scale);
+                }
+            }
+        }
+        
+        // 显示结果
+        function showResults() {
+            testScreen.style.display = 'none';
+            resultScreen.style.display = 'block';
+            
+            resultsContainer.innerHTML = '';
+            
+            let totalDifference = 0;
+            
+            testData.forEach((test, index) => {
+                const difference = Math.abs(test.actual - test.estimate);
+                totalDifference += difference;
+                
+                const item = document.createElement('div');
+                item.className = 'result-item';
+                item.innerHTML = `
+                    <strong>测试 ${index + 1}:</strong>
+                    实际比例: ${test.actual}%,
+                    你的估计: ${test.estimate}%,
+                    差异: ${difference}%
+                `;
+                resultsContainer.appendChild(item);
+            });
+            
+            const averageDiff = (totalDifference / totalTests).toFixed(1);
+            const summary = document.createElement('div');
+            summary.className = 'result-item';
+            summary.style.fontWeight = 'bold';
+            summary.style.marginTop = '20px';
+            summary.innerHTML = `平均差异: ${averageDiff}%`;
+            resultsContainer.appendChild(summary);
+        }
+    </script>
+</body>
+</html>

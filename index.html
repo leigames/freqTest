@@ -47,6 +47,7 @@
         .result-item {
             margin: 10px 0;
             font-size: 16px;
+            text-align: center;
         }
         .input-container {
             margin: 15px 0;
@@ -97,6 +98,15 @@
             height: auto;
             image-rendering: pixelated;
         }
+        .result-details {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .summary {
+            font-weight: bold;
+            margin-top: 20px;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
@@ -112,7 +122,7 @@
         <canvas id="canvas"></canvas>
         <div class="input-container">
             <label for="estimate">你的估计 (%):</label>
-            <input type="number" id="estimate" min="0" max="100" step="1" inputmode="numeric">
+            <input type="number" id="estimate" min="0" max="100" step="1">
         </div>
         <button id="next-btn">下一张</button>
     </div>
@@ -120,13 +130,15 @@
     <div id="result-screen" style="display: none;">
         <h2>测试结果</h2>
         <div id="results" class="result"></div>
+        <div id="summary" class="summary"></div>
         <button id="restart-btn">重新测试</button>
     </div>
 
     <div id="image-modal" class="image-modal">
         <div class="modal-content">
-            <h3 id="modal-title">测试图</h3>
+            <h3 id="modal-title">测试图详情</h3>
             <canvas id="modal-canvas"></canvas>
+            <div id="modal-details" class="result-details"></div>
             <button onclick="document.getElementById('image-modal').style.display='none'">关闭</button>
         </div>
     </div>
@@ -165,9 +177,13 @@
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.drawImage(canvas, 0, 0, originalWidth, originalHeight);
             
+            const actual = Math.round((whitePixels / (originalWidth * originalHeight)) * 100);
+            const difference = Math.abs(actual - estimate);
+            
             testData.push({
-                actual: Math.round((whitePixels / (originalWidth * originalHeight)) * 100),
+                actual: actual,
                 estimate: estimate,
+                difference: difference,
                 imageData: tempCanvas.toDataURL(),
                 displayWidth: currentDisplayWidth,
                 displayHeight: currentDisplayHeight
@@ -190,32 +206,52 @@
             document.getElementById('result-screen').style.display = 'block';
             
             const resultsContainer = document.getElementById('results');
+            const summaryContainer = document.getElementById('summary');
             resultsContainer.innerHTML = '';
+            
+            let totalDifference = 0;
             
             testData.forEach((test, index) => {
                 const item = document.createElement('div');
                 item.className = 'result-item';
                 item.innerHTML = `
                     <span class="test-link">【测试 ${index + 1}】</span>
-                    实际: ${test.actual}%，估计: ${test.estimate}%，差异: ${Math.abs(test.actual - test.estimate)}%
+                    实际: ${test.actual}%，估计: ${test.estimate}%，差异: ${test.difference}%
                 `;
                 item.querySelector('.test-link').onclick = () => {
-                    document.getElementById('modal-title').textContent = `测试 ${index + 1} (实际: ${test.actual}%)`;
-                    modalCanvas.style.width = test.displayWidth + 'px';
-                    modalCanvas.style.height = test.displayHeight + 'px';
-                    
-                    const img = new Image();
-                    img.onload = function() {
-                        modalCanvas.width = originalWidth;
-                        modalCanvas.height = originalHeight;
-                        modalCtx.drawImage(img, 0, 0);
-                    };
-                    img.src = test.imageData;
-                    
-                    document.getElementById('image-modal').style.display = 'flex';
+                    showTestDetails(index);
                 };
                 resultsContainer.appendChild(item);
+                totalDifference += test.difference;
             });
+            
+            // 计算并显示平均差异
+            const averageDiff = (totalDifference / testData.length).toFixed(1);
+            summaryContainer.innerHTML = `平均差异: ${averageDiff}%`;
+        }
+
+        // 显示测试详情
+        function showTestDetails(index) {
+            const test = testData[index];
+            document.getElementById('modal-title').textContent = `测试 ${index + 1}`;
+            document.getElementById('modal-details').innerHTML = `
+                实际比例: ${test.actual}%<br>
+                你的估计: ${test.estimate}%<br>
+                差异: ${test.difference}%
+            `;
+            
+            modalCanvas.style.width = test.displayWidth + 'px';
+            modalCanvas.style.height = test.displayHeight + 'px';
+            
+            const img = new Image();
+            img.onload = function() {
+                modalCanvas.width = originalWidth;
+                modalCanvas.height = originalHeight;
+                modalCtx.drawImage(img, 0, 0);
+            };
+            img.src = test.imageData;
+            
+            document.getElementById('image-modal').style.display = 'flex';
         }
 
         // 生成点阵图

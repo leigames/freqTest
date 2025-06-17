@@ -13,15 +13,13 @@
             text-align: center;
             -webkit-text-size-adjust: 100%;
         }
-        .container {
-            margin-top: 20px;
-        }
         #canvas {
             border: 1px solid #000;
             margin: 15px auto;
             display: block;
             max-width: 100%;
             height: auto;
+            image-rendering: pixelated;
         }
         button {
             padding: 12px 24px;
@@ -35,9 +33,6 @@
             width: 90%;
             max-width: 300px;
         }
-        button:hover {
-            background-color: #45a049;
-        }
         .progress {
             margin: 15px 0;
             font-weight: bold;
@@ -48,7 +43,6 @@
             text-align: left;
             border-top: 1px solid #ddd;
             padding-top: 15px;
-            word-break: break-word;
         }
         .result-item {
             margin: 10px 0;
@@ -71,17 +65,37 @@
             display: block;
             margin-bottom: 8px;
         }
-        @media (max-width: 480px) {
-            body {
-                padding: 10px;
-            }
-            button {
-                padding: 10px 20px;
-                font-size: 15px;
-            }
-            .progress {
-                font-size: 16px;
-            }
+        .test-link {
+            color: #0066cc;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            text-align: center;
+        }
+        #modal-canvas {
+            border: 1px solid #000;
+            max-width: 100%;
+            height: auto;
+            image-rendering: pixelated;
         }
     </style>
 </head>
@@ -109,127 +123,110 @@
         <button id="restart-btn">重新测试</button>
     </div>
 
+    <div id="image-modal" class="image-modal">
+        <div class="modal-content">
+            <h3 id="modal-title">测试图</h3>
+            <canvas id="modal-canvas"></canvas>
+            <button onclick="document.getElementById('image-modal').style.display='none'">关闭</button>
+        </div>
+    </div>
+
     <script>
-        // 全局变量
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const startBtn = document.getElementById('start-btn');
-        const nextBtn = document.getElementById('next-btn');
-        const restartBtn = document.getElementById('restart-btn');
-        const estimateInput = document.getElementById('estimate');
-        const progressDisplay = document.getElementById('progress');
-        const startScreen = document.getElementById('start-screen');
-        const testScreen = document.getElementById('test-screen');
-        const resultScreen = document.getElementById('result-screen');
-        const resultsContainer = document.getElementById('results');
-        
+        const modalCanvas = document.getElementById('modal-canvas');
+        const modalCtx = modalCanvas.getContext('2d');
+        const originalWidth = 160;
+        const originalHeight = 90;
         let currentTest = 0;
-        const totalTests = 10;
         const testData = [];
-        const originalWidth = 160;  // 原始点阵宽度
-        const originalHeight = 90;  // 原始点阵高度
-        let scale = 1;              // 动态计算的缩放比例
-        let displayWidth, displayHeight; // 实际显示尺寸
-        
+        let currentDisplayWidth, currentDisplayHeight;
+
         // 开始测试
-        startBtn.addEventListener('click', () => {
-            startScreen.style.display = 'none';
-            testScreen.style.display = 'block';
+        document.getElementById('start-btn').addEventListener('click', () => {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('test-screen').style.display = 'block';
             adjustCanvasSize();
             generateDotImage();
         });
-        
+
         // 下一张图片
-        nextBtn.addEventListener('click', () => {
-            const estimate = parseInt(estimateInput.value);
-            
-            if (isNaN(estimate)) {
-                alert('请输入一个数字');
-                return;
-            }
-            
-            if (estimate < 0 || estimate > 100) {
+        document.getElementById('next-btn').addEventListener('click', () => {
+            const estimate = parseInt(document.getElementById('estimate').value);
+            if (isNaN(estimate) || estimate < 0 || estimate > 100) {
                 alert('请输入0-100之间的数字');
                 return;
             }
+
+            // 保存当前测试结果和图像数据
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = originalWidth;
+            tempCanvas.height = originalHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(canvas, 0, 0, originalWidth, originalHeight);
             
-            // 保存当前测试结果
             testData.push({
                 actual: Math.round((whitePixels / (originalWidth * originalHeight)) * 100),
-                estimate: estimate
+                estimate: estimate,
+                imageData: tempCanvas.toDataURL(),
+                displayWidth: currentDisplayWidth,
+                displayHeight: currentDisplayHeight
             });
-            
-            // 清空输入
-            estimateInput.value = '';
-            
-            // 更新进度
+
+            document.getElementById('estimate').value = '';
             currentTest++;
-            progressDisplay.textContent = currentTest + 1;
+            document.getElementById('progress').textContent = currentTest + 1;
             
-            if (currentTest < totalTests) {
+            if (currentTest < 10) {
                 generateDotImage();
             } else {
-                // 测试结束，显示结果
                 showResults();
             }
         });
-        
-        // 重新测试
-        restartBtn.addEventListener('click', () => {
-            currentTest = 0;
-            testData.length = 0;
-            progressDisplay.textContent = '1';
-            resultScreen.style.display = 'none';
-            testScreen.style.display = 'block';
-            adjustCanvasSize();
-            generateDotImage();
-        });
-        
-        // 调整画布大小以适应屏幕
-        function adjustCanvasSize() {
-            // 计算最大可用宽度（留出边距）
-            const maxWidth = Math.min(window.innerWidth - 40, 640);  // 最大不超过640px
-            // 保持原始比例 (160:90 = 16:9)
-            displayWidth = maxWidth;
-            displayHeight = Math.round(maxWidth * originalHeight / originalWidth);
+
+        // 显示结果
+        function showResults() {
+            document.getElementById('test-screen').style.display = 'none';
+            document.getElementById('result-screen').style.display = 'block';
             
-            // 设置画布显示尺寸
-            canvas.style.width = displayWidth + 'px';
-            canvas.style.height = displayHeight + 'px';
+            const resultsContainer = document.getElementById('results');
+            resultsContainer.innerHTML = '';
             
-            // 设置画布实际像素尺寸（保持清晰度）
-            const devicePixelRatio = window.devicePixelRatio || 1;
-            canvas.width = originalWidth * devicePixelRatio;
-            canvas.height = originalHeight * devicePixelRatio;
-            
-            // 调整绘图比例
-            ctx.scale(devicePixelRatio, devicePixelRatio);
-            
-            // 计算每个点的显示比例
-            scale = displayWidth / originalWidth;
+            testData.forEach((test, index) => {
+                const item = document.createElement('div');
+                item.className = 'result-item';
+                item.innerHTML = `
+                    <span class="test-link">【测试 ${index + 1}】</span>
+                    实际: ${test.actual}%，估计: ${test.estimate}%，差异: ${Math.abs(test.actual - test.estimate)}%
+                `;
+                item.querySelector('.test-link').onclick = () => {
+                    document.getElementById('modal-title').textContent = `测试 ${index + 1} (实际: ${test.actual}%)`;
+                    modalCanvas.style.width = test.displayWidth + 'px';
+                    modalCanvas.style.height = test.displayHeight + 'px';
+                    
+                    const img = new Image();
+                    img.onload = function() {
+                        modalCanvas.width = originalWidth;
+                        modalCanvas.height = originalHeight;
+                        modalCtx.drawImage(img, 0, 0);
+                    };
+                    img.src = test.imageData;
+                    
+                    document.getElementById('image-modal').style.display = 'flex';
+                };
+                resultsContainer.appendChild(item);
+            });
         }
-        
-        // 窗口大小改变时调整画布
-        window.addEventListener('resize', () => {
-            if (testScreen.style.display !== 'none') {
-                adjustCanvasSize();
-                generateDotImage(); // 重新生成当前图像
-            }
-        });
-        
-        let whitePixels = 0;
-        
+
         // 生成点阵图
+        let whitePixels = 0;
         function generateDotImage() {
-            // 清空画布
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // 随机决定白点比例 (10%-90%)
             const whiteRatio = 0.1 + Math.random() * 0.8;
             whitePixels = 0;
             
-            // 绘制点阵
             for (let y = 0; y < originalHeight; y++) {
                 for (let x = 0; x < originalWidth; x++) {
                     if (Math.random() < whiteRatio) {
@@ -242,39 +239,29 @@
                 }
             }
         }
-        
-        // 显示结果
-        function showResults() {
-            testScreen.style.display = 'none';
-            resultScreen.style.display = 'block';
+
+        // 调整画布大小
+        function adjustCanvasSize() {
+            const maxWidth = Math.min(window.innerWidth - 40, 640);
+            currentDisplayWidth = maxWidth;
+            currentDisplayHeight = Math.round(maxWidth * originalHeight / originalWidth);
             
-            resultsContainer.innerHTML = '';
-            
-            let totalDifference = 0;
-            
-            testData.forEach((test, index) => {
-                const difference = Math.abs(test.actual - test.estimate);
-                totalDifference += difference;
-                
-                const item = document.createElement('div');
-                item.className = 'result-item';
-                item.innerHTML = `
-                    <strong>【测试 ${index + 1}】</strong>
-                    实际比例: ${test.actual}，%
-                    你的估计: ${test.estimate}，%
-                    差异: ${difference}%
-                `;
-                resultsContainer.appendChild(item);
-            });
-            
-            const averageDiff = (totalDifference / totalTests).toFixed(1);
-            const summary = document.createElement('div');
-            summary.className = 'result-item';
-            summary.style.fontWeight = 'bold';
-            summary.style.marginTop = '20px';
-            summary.innerHTML = `平均差异: ${averageDiff}%`;
-            resultsContainer.appendChild(summary);
+            canvas.style.width = currentDisplayWidth + 'px';
+            canvas.style.height = currentDisplayHeight + 'px';
+            canvas.width = originalWidth;
+            canvas.height = originalHeight;
         }
+
+        // 重新测试
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            currentTest = 0;
+            testData.length = 0;
+            document.getElementById('result-screen').style.display = 'none';
+            document.getElementById('test-screen').style.display = 'block';
+            document.getElementById('progress').textContent = '1';
+            adjustCanvasSize();
+            generateDotImage();
+        });
     </script>
 </body>
 </html>

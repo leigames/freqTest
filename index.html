@@ -259,9 +259,9 @@
                 const item = document.createElement('div');
                 item.className = 'result-item';
                 item.innerHTML = `
-                    <strong>测试 ${index + 1}:</strong><br>
-                    实际比例: ${test.actual}%<br>
-                    你的估计: ${test.estimate}%<br>
+                    <strong>【测试 ${index + 1}】</strong>
+                    实际比例: ${test.actual}，%
+                    你的估计: ${test.estimate}，%
                     差异: ${difference}%
                 `;
                 resultsContainer.appendChild(item);
